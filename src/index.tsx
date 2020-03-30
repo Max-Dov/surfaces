@@ -7,9 +7,11 @@ import {Controls} from "./components/controls.components";
 
 
 ReactDOM.render(
-    <Canvas camera={{position: [0, 0, 10], near: 0.1, far: 100}}>
+    <Canvas camera={{position: [0, -10, 10], near: 0.1, far: 100}}>
         <pointLight position={[10, 10, 10]}/>
-        <Surfaces />
+        {/*<ambientLight/>*/}
+        <Surfaces gridSize={20}/>
         <Controls />
-    </Canvas>
-    , document.getElementById('root'));
+    </Canvas>,
+    document.getElementById('root')
+);
