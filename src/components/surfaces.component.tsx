@@ -1,32 +1,39 @@
 import * as THREE from 'three';
-import React, {Dispatch, SetStateAction, useEffect, useRef, useState} from 'react';
-import {useFrame} from "react-three-fiber";
-import {Coords} from "../models/coords.model";
-import {Triangle} from "react-three-fiber/components";
-import {BufferAttribute, Float32BufferAttribute} from "three";
+import React, {Dispatch, SetStateAction, useEffect, useMemo, useRef, useState} from 'react';
+import { Float32BufferAttribute } from 'three';
+import { useFrame } from 'react-three-fiber';
+import { useSpring, a } from "react-spring/three";
 
 let r = () => Math.random(); // just for shorter access
 
 export default function Surfaces(props: {
     gridSize?: number
 }) {
-    const mesh: any = useRef();
+    const meshRef: any = useRef();
     const GRID_SIZE = props.gridSize || 10; // along X and Y axes
     const zAxis: THREE.Vector3 = new THREE.Vector3(0, 0, 1);
     const [dots, setDots]: [THREE.Vector3[], Dispatch<SetStateAction<THREE.Vector3[]>>] = useState(generateDots(GRID_SIZE));
-    const [triangles, setTriangles]: [THREE.Triangle[], Dispatch<SetStateAction<THREE.Triangle[]>>] = useState(triangulateDots(dots));
+    const triangulatedDots = useMemo(() => triangulateDots(dots), [dots]);
+    const [triangles, setTriangles]: [THREE.Triangle[], Dispatch<SetStateAction<THREE.Triangle[]>>] = useState(triangulatedDots);
     const [geometry, setGeometry]: [THREE.BufferGeometry, Dispatch<SetStateAction<THREE.BufferGeometry>>] = useState(formGeometryFromTriangles(triangles));
+    const [hovered, setHovered]: [boolean, Dispatch<SetStateAction<boolean>>] = useState(false);
+
+    const meshProps = useSpring({
+        color: hovered ? 'orange' : 'hotpink',
+    });
 
     /**
      * Generating vectors. Each vector placed randomly within 1x1 tile.
      * Distributing dots across tiles helps with finding closest dot for any other dot as it would be within one of 8 surrounding tiles.
      */
     function generateDots(dotsNumber: number): THREE.Vector3[] {
+        console.time('dotsgen');
         const generatedDots: THREE.Vector3[] = [];
         for (let y = 0; y < dotsNumber; y++)
             for (let x = 0; x < dotsNumber; x++) {
                 generatedDots.push(new THREE.Vector3(x + r() / 3, y + r() / 3, r()));
             }
+        console.timeEnd('dotsgen');
         return generatedDots;
     }
 
@@ -117,6 +124,7 @@ export default function Surfaces(props: {
     }
 
     function formGeometryFromTriangles(triangles: THREE.Triangle[]): THREE.BufferGeometry {
+        console.time('geometrygen');
         let geometry = new THREE.BufferGeometry();
         let vertices: number[] = [];
         let normals = [];
@@ -135,27 +143,42 @@ export default function Surfaces(props: {
         })
         geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3));
         geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3));
+        console.timeEnd('geometrygen');
         return geometry;
     }
 
-    useFrame(() => {
-        setDots(dots.map(dot => {
-            dot.z += (r() - 0.5) / 10;
-            return dot;
-        }))
-        setGeometry(formGeometryFromTriangles(triangles));
-    })
+    function shuffleDots(e?: PointerEvent): void {
+        console.time('dotsshuffle');
+        setTriangles(triangles.map(triangle => {
+            triangle.a.z += (r() - 0.5) / 10;
+            return triangle;
+        }));
+        console.timeEnd('dotsshuffle');
+    }
+
+    useFrame(() => meshRef.current.rotation.z += 0.05);
 
     return (<>
-            <mesh visible ref={mesh} geometry={geometry} position={[-GRID_SIZE / 2, -GRID_SIZE / 2, 0]}>
-                <meshPhongMaterial attach="material" color="hotpink" side={THREE.DoubleSide}/>
+            <a.mesh
+                visible
+                ref={meshRef}
+                geometry={geometry}
+                position={[-GRID_SIZE / 2, -GRID_SIZE / 2, 0]}
+                onPointerOver={() => setHovered(true)}
+                onPointerOut={() => setHovered(false)}
+            >
+                <a.meshPhongMaterial
+                    attach="material"
+                    side={THREE.DoubleSide}
+                    color={meshProps.color}
+                />
                 {dots.map(dot =>
                     <mesh position={[dot.x, dot.y, dot.z]}>
                         <sphereBufferGeometry attach="geometry" args={[0.05]}/>
                         <meshPhongMaterial attach="material" color="orange"/>
                     </mesh>
                 )}
-            </mesh>
+            </a.mesh>
 
         </>
     );
