@@ -150,6 +150,7 @@ export default function Surfaces(props: {
             triangle.a.z += (r() - 0.5) * 0.05;
             return triangle;
         }))
+        geometry.dispose(); // TODO change to create different attributes not geometry
         setGeometry(formGeometryFromSurface(surface));
         console.timeEnd('mesh shuffle');
     }
