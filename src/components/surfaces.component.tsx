@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import React, {Dispatch, SetStateAction, useEffect, useMemo, useRef, useState} from 'react';
-import { Float32BufferAttribute } from 'three';
-import { useFrame } from 'react-three-fiber';
-import { useSpring, a } from "react-spring/three";
+import {Float32BufferAttribute} from 'three';
+import React, {Dispatch, SetStateAction, useMemo, useRef, useState} from 'react';
+import {useFrame} from 'react-three-fiber';
+import {a, useSpring} from "react-spring/three";
 
 let r = () => Math.random(); // just for shorter access
 
@@ -10,22 +10,20 @@ export default function Surfaces(props: {
     gridSize?: number
 }) {
     const meshRef: any = useRef();
-    const GRID_SIZE = props.gridSize || 10; // along X and Y axes
     const zAxis: THREE.Vector3 = new THREE.Vector3(0, 0, 1);
-    const [dots, setDots]: [THREE.Vector3[], Dispatch<SetStateAction<THREE.Vector3[]>>] = useState(generateDots(GRID_SIZE));
-    const triangulatedDots = useMemo(() => triangulateDots(dots), [dots]);
-    const [triangles, setTriangles]: [THREE.Triangle[], Dispatch<SetStateAction<THREE.Triangle[]>>] = useState(triangulatedDots);
-    const [geometry, setGeometry]: [THREE.BufferGeometry, Dispatch<SetStateAction<THREE.BufferGeometry>>] = useState(formGeometryFromTriangles(triangles));
+    const initialSurface: THREE.Triangle[] = useMemo(() => generateSurface(props.gridSize || 10), [props.gridSize]);
+    const initialGeometry: THREE.BufferGeometry = useMemo(() => formGeometryFromSurface(initialSurface), [initialSurface]);
+    const [surface, setSurface]: [THREE.Triangle[], Dispatch<SetStateAction<THREE.Triangle[]>>] = useState(initialSurface);
+    const [geometry, setGeometry]: [THREE.BufferGeometry, Dispatch<SetStateAction<THREE.BufferGeometry>>] = useState(initialGeometry);
     const [hovered, setHovered]: [boolean, Dispatch<SetStateAction<boolean>>] = useState(false);
-
-    const meshProps = useSpring({
+    const surfaceProps = useSpring({
         color: hovered ? 'orange' : 'hotpink',
     });
 
-    /**
-     * Generating vectors. Each vector placed randomly within 1x1 tile.
-     * Distributing dots across tiles helps with finding closest dot for any other dot as it would be within one of 8 surrounding tiles.
-     */
+    function generateSurface(gridSize: number): THREE.Triangle[] {
+        return triangulateDots(generateDots(gridSize), gridSize);
+    }
+
     function generateDots(dotsNumber: number): THREE.Vector3[] {
         console.time('dotsgen');
         const generatedDots: THREE.Vector3[] = [];
@@ -40,7 +38,7 @@ export default function Surfaces(props: {
     /**
      * Connects all dots forming triangulated surface. Implements Delaunay triangulation.
      */
-    function triangulateDots(dots: THREE.Vector3[]): THREE.Triangle[] {
+    function triangulateDots(dots: THREE.Vector3[], gridSize: number): THREE.Triangle[] {
         console.time('triangulation');
         /**
          * Triangulation algorithm I come up with as follows:
@@ -79,7 +77,7 @@ export default function Surfaces(props: {
                     let dotsToCheck: THREE.Vector3[] = [];
                     for (let xShift = -1; xShift < 2; xShift++)
                         for (let yShift = -1; yShift < 2; yShift++) {
-                            const neighborIndex = (Math.trunc(circleCenter.y) + yShift) * GRID_SIZE  // Y tile coordinate
+                            const neighborIndex = (Math.trunc(circleCenter.y) + yShift) * gridSize  // Y tile coordinate
                                 + Math.trunc(circleCenter.x) + xShift ;             // X tile coordinate
                             if (dots[neighborIndex]) {
                                 dotsToCheck.push(dots[neighborIndex]);
@@ -122,8 +120,7 @@ export default function Surfaces(props: {
         console.timeEnd('triangulation');
         return triangles;
     }
-
-    function formGeometryFromTriangles(triangles: THREE.Triangle[]): THREE.BufferGeometry {
+    function formGeometryFromSurface(triangles: THREE.Triangle[]): THREE.BufferGeometry {
         console.time('geometrygen');
         let geometry = new THREE.BufferGeometry();
         let vertices: number[] = [];
@@ -147,39 +144,36 @@ export default function Surfaces(props: {
         return geometry;
     }
 
-    function shuffleDots(e?: PointerEvent): void {
-        console.time('dotsshuffle');
-        setTriangles(triangles.map(triangle => {
-            triangle.a.z += (r() - 0.5) / 10;
+    function shuffleTriangles(e?: PointerEvent): void {
+        console.time('mesh shuffle');
+        setSurface(surface.map(triangle => {
+            triangle.a.z += (r() - 0.5) * 0.05;
             return triangle;
-        }));
-        console.timeEnd('dotsshuffle');
+        }))
+        setGeometry(formGeometryFromSurface(surface));
+        console.timeEnd('mesh shuffle');
     }
 
-    useFrame(() => meshRef.current.rotation.z += 0.05);
+    useFrame(() => {
+        // meshRef.current.rotation.z += 0.05
+        shuffleTriangles();
+    });
 
     return (<>
             <a.mesh
                 visible
                 ref={meshRef}
                 geometry={geometry}
-                position={[-GRID_SIZE / 2, -GRID_SIZE / 2, 0]}
+                position={[-props.gridSize / 2, -props.gridSize / 2, 0]}
                 onPointerOver={() => setHovered(true)}
                 onPointerOut={() => setHovered(false)}
             >
                 <a.meshPhongMaterial
                     attach="material"
                     side={THREE.DoubleSide}
-                    color={meshProps.color}
+                    color={surfaceProps.color}
                 />
-                {dots.map(dot =>
-                    <mesh position={[dot.x, dot.y, dot.z]}>
-                        <sphereBufferGeometry attach="geometry" args={[0.05]}/>
-                        <meshPhongMaterial attach="material" color="orange"/>
-                    </mesh>
-                )}
             </a.mesh>
-
         </>
     );
 }
