@@ -19,8 +19,6 @@ export default function Surfaces(props: {
         color: hovered ? 'orange' : 'hotpink'
     });
 
-
-
     function shuffleTriangles(e?: PointerEvent): void {
         console.time('mesh shuffle');
         geometry.dispose(); // TODO change to create different attributes not geometry
@@ -30,7 +28,7 @@ export default function Surfaces(props: {
 
     useFrame(() => {
         // meshRef.current.rotation.z += 0.05
-        shuffleTriangles();
+        // shuffleTriangles();
     });
 
     return (<>

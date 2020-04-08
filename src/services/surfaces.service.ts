@@ -1,6 +1,4 @@
 import * as THREE from 'three';
-import {Coords} from "../models/coords.model";
-import {BufferFigure} from "../models/buffer-figure.model";
 import {Float32BufferAttribute} from "three";
 
 export class SurfacesService {
@@ -12,10 +10,27 @@ export class SurfacesService {
         const generatedDots: THREE.Vector3[] = [];
         for (let y = 0; y < dotsNumber; y++)
             for (let x = 0; x < dotsNumber; x++) {
-                generatedDots.push(new THREE.Vector3(x + SurfacesService.r() / 3, y + SurfacesService.r() / 3, SurfacesService.r()));
+                generatedDots.push(new THREE.Vector3(x + SurfacesService.r() / 1.1, y + SurfacesService.r() / 1.1, SurfacesService.r() / 2));
             }
         console.timeEnd('dotsgen');
         return generatedDots;
+    }
+
+    /**
+     * Calculates surrounding coordinates around provided coordinate within specified radius.
+     * Expected to be used to calculate surrounding tiles for intersections/duplications checks.
+     */
+    static getSurroundingCoordinates = (baseCoordinate: THREE.Vector3, radius: number = 1): THREE.Vector3[] => {
+        const resultArray: THREE.Vector3[] = [];
+        for (let y = -radius; y <= radius; y++)
+            for (let x = -radius; x <= radius; x++) {
+                resultArray.push(new THREE.Vector3(
+                    x + Math.trunc(baseCoordinate.x),
+                    y + Math.trunc(baseCoordinate.y),
+                    0
+                ));
+            }
+        return resultArray;
     }
 
     /**
@@ -37,6 +52,7 @@ export class SurfacesService {
          * 7. Empty edgesToCheck array.
          */
         const edgesToCheck: [THREE.Vector3, THREE.Vector3, boolean][] = []; // 2 edge's vertices and isChecked status
+        const existingEdges: [THREE.Vector3, THREE.Vector3][][] = []; // contains edges to check mapped to a tiles.
         edgesToCheck.push([dots[0], dots[1], false]);
         const triangles: THREE.Triangle[] = [];
         const GROWTH_DELTA: number = 0.01;
@@ -51,55 +67,52 @@ export class SurfacesService {
             while (numberOfSidesChecked < 2) {
                 perpendicular.applyAxisAngle(SurfacesService.zAxis, Math.PI);
                 perpendicular.setLength(GROWTH_DELTA);
-                while (perpendicular.length() < 2) { // tile size is 1
+                let dotsFound = false;
+                while (!dotsFound && perpendicular.length() < 2) { // tile size is 1
                     const circleCenter = new THREE.Vector3().subVectors(edgeCenter, perpendicular);
                     const radius = new THREE.Vector3().subVectors( // distance from one of edges to "head" of perpendicular when it's set from edge center
                         edgeToCheck[0], // can be edgeToCheck[1] as well
                         circleCenter
                     ).length();
-                    let dotsToCheck: THREE.Vector3[] = [];
-                    for (let xShift = -1; xShift < 2; xShift++)
-                        for (let yShift = -1; yShift < 2; yShift++) {
-                            const neighborIndex = (Math.trunc(circleCenter.y) + yShift) * gridSize  // Y tile coordinate
-                                + Math.trunc(circleCenter.x) + xShift ;             // X tile coordinate
-                            if (dots[neighborIndex]) {
-                                dotsToCheck.push(dots[neighborIndex]);
-                            }
-                        }
-                    dotsToCheck = dotsToCheck.filter(dot => dot !== edgeToCheck[0] && dot !== edgeToCheck[1]); // don't need to verify with edge we're basing triangle on
-                    const dotWithinRadius = dotsToCheck.find(dot => new THREE.Vector3().subVectors(circleCenter, dot).length() <= radius);
-                    if (dotWithinRadius) {
-                        let newEdges: [THREE.Vector3, THREE.Vector3, boolean][] = [
-                            [dotWithinRadius, edgeToCheck[0], false],
-                            [dotWithinRadius, edgeToCheck[1], false],
-                        ];
-                        let dupeNumber = 0; // only if both are dupes need to withdraw triangle gen
-                        for (let existingEdge of edgesToCheck) {
-                            if (existingEdge[0] === newEdges[0][0] && existingEdge[1] === newEdges[0][1]
-                                || existingEdge[0] === newEdges[0][1] && existingEdge[1] === newEdges[0][0]) {
-                                newEdges[0][2] = true;
-                                dupeNumber++;
-                            }
-                            if (existingEdge[0] === newEdges[1][0] && existingEdge[1] === newEdges[1][1]
-                                || existingEdge[0] === newEdges[1][1] && existingEdge[1] === newEdges[1][0]) {
-                                newEdges[1][2] = true;
-                                dupeNumber++;
-                            }
-                            if (dupeNumber >= 2) break;
-                        }
-                        if (dupeNumber < 2) {
-                            edgesToCheck.push(...newEdges.filter(newEdge => !newEdge[2])); // push non-dupes
-                        }
-                        triangles.push(new THREE.Triangle(edgeToCheck[0], edgeToCheck[1], dotWithinRadius));
-                        break; // breaking cycle of "growing" perpendicular for new triangle
-                    }
+                    SurfacesService.getSurroundingCoordinates(circleCenter)
+                        .map(neighborCoordinate => dots[neighborCoordinate.y * gridSize + neighborCoordinate.x])
+                        .filter(dot => dot && dot !== edgeToCheck[0] && dot !== edgeToCheck[1]
+                            && new THREE.Vector3().subVectors(circleCenter, dot).length() <= radius)
+                        .forEach(dotWithinRadius => {
+                            let newEdges: [THREE.Vector3, THREE.Vector3][] = [
+                                [dotWithinRadius, edgeToCheck[0]],
+                                [dotWithinRadius, edgeToCheck[1]],
+                            ];
+                            // TODO explain sorting
+                            newEdges.forEach(edge => edge.sort((a, b) => a.y - b.y));
+                            // filter out dupes compared to edgesToCheck
+                            newEdges.filter(newEdge => !edgesToCheck.some(oldEdge => oldEdge[0] == newEdge[0] && oldEdge[1] == newEdge[1]))
+                            // filter out new edges that are intersecting old ages within XY coordinate axes
+                            .filter(newEdge =>
+                                !SurfacesService.getSurroundingCoordinates(newEdge[0])
+                                    .concat(SurfacesService.getSurroundingCoordinates(newEdge[1]))
+                                    .some(oldEdgesCoordinate =>
+                                        existingEdges[oldEdgesCoordinate.y * gridSize + oldEdgesCoordinate.x]
+                                        && existingEdges[oldEdgesCoordinate.y * gridSize + oldEdgesCoordinate.x] // TODO refactor
+                                            .some(oldEdge => (oldEdge[0].y - newEdge[0].y) * (oldEdge[1].y - newEdge[1].y) < -1) // intersection condition
+                                    )
+                            ).forEach(validEdge => {
+                                edgesToCheck.push([validEdge[0], validEdge[1], false]);
+                                const existingEdgesCoordinate = validEdge[0].y * gridSize + validEdge[0].x;
+                                if (!existingEdges[existingEdgesCoordinate]) existingEdges[existingEdgesCoordinate] = [];
+                                existingEdges[existingEdgesCoordinate].push(validEdge);
+                            });
+                            // TODO implement more performant dupe check
+                            triangles.push(new THREE.Triangle(edgeToCheck[0], edgeToCheck[1], dotWithinRadius));
+                            dotsFound = true; // breaking cycle of "growing" perpendicular
+                        });
                     perpendicular.setLength(perpendicular.length() + GROWTH_DELTA);
                 }
                 numberOfSidesChecked++;
             }
             edgeToCheck[2] = true;
         }
-        edgesToCheck.length = 0;
+        edgesToCheck.length = existingEdges.length = 0;
         console.timeEnd('triangulation');
         return triangles;
     }
@@ -121,7 +134,7 @@ export class SurfacesService {
                 normal.x, normal.y, normal.z,
                 normal.x, normal.y, normal.z
             )
-        })
+        });
         geometry.setAttribute('position', new Float32BufferAttribute(vertices, 3));
         geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3));
         console.timeEnd('geometrygen');
