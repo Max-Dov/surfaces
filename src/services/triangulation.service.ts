@@ -66,24 +66,24 @@ export class TriangulationService {
                             // in order to map newEdges to grid tile each edge needs to have Y-axes highest point at 0-index
                             // also having dots sorted in order helps with dupe checking
                             newEdges.forEach(edge => edge.sort((a, b) => a.y - b.y));
+
                             // filter out dupes compared to edgesToCheck
-                            newEdges.filter(newEdge => !edgesToCheck.some(oldEdge => oldEdge[0] === newEdge[0] && oldEdge[1] === newEdge[1]))
-                                // filter out new edges that are intersecting old edges within XY coordinate axes
-                                .filter(newEdge =>
-                                    !MathService.getSurroundingCoordinates(newEdge[0])
-                                        .concat(MathService.getSurroundingCoordinates(newEdge[1]))
-                                        .some(oldEdgesCoordinate => {
-                                            const oldEdges = existingEdges[MathService.get1DIndex(oldEdgesCoordinate.x, oldEdgesCoordinate.y, gridSize)];
-                                            return oldEdges && oldEdges.some(oldEdge => MathService.doIntersect(newEdge, oldEdge));
-                                        }))
-                                .forEach(validEdge => {
-                                    edgesToCheck.push([validEdge[0], validEdge[1], false]);
-                                    const existingEdgesCoordinate = validEdge[0].y * gridSize + validEdge[0].x;
-                                    // const existingEdgesCoordinate = MathService.get1DIndex(validEdge[0].x, validEdge[0].y, gridSize);
-                                    if (!existingEdges[existingEdgesCoordinate]) existingEdges[existingEdgesCoordinate] = [];
-                                    existingEdges[existingEdgesCoordinate].push(validEdge);
-                                });
-                            // TODO implement more performant dupe check
+                            const validEdges = newEdges.filter(newEdge => !edgesToCheck.some(oldEdge => oldEdge[0] === newEdge[0] && oldEdge[1] === newEdge[1]))
+                            // filter out new edges that are intersecting old edges within XY coordinate axes
+                            // TODO can't make it work
+                            // .filter(newEdge =>
+                            //     !MathService.getSurroundingCoordinates(newEdge[0])
+                            //         .concat(MathService.getSurroundingCoordinates(newEdge[1]))
+                            //         .some(oldEdgesCoordinate => {
+                            //             const oldEdges = existingEdges[MathService.get1DIndex(oldEdgesCoordinate.x, oldEdgesCoordinate.y, gridSize)];
+                            //             return oldEdges && oldEdges.some(oldEdge => MathService.doIntersect(newEdge, oldEdge));
+                            //         }));
+                            validEdges.forEach(validEdge => {
+                                edgesToCheck.push([validEdge[0], validEdge[1], false]);
+                                const existingEdgesCoordinate = MathService.get1DIndex(validEdge[0].x, validEdge[0].y, gridSize);
+                                if (!existingEdges[existingEdgesCoordinate]) existingEdges[existingEdgesCoordinate] = [];
+                                existingEdges[existingEdgesCoordinate].push(validEdge);
+                            });
                             triangles.push(new THREE.Triangle(edgeToCheck[0], edgeToCheck[1], dotWithinRadius));
                             dotsFound = true; // breaking cycle of "growing" perpendicular
                         });

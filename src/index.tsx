@@ -7,11 +7,27 @@ import {Controls} from "./components/controls.components";
 
 
 ReactDOM.render(
-    <Canvas camera={{position: [0, -10, 10], near: 0.1, far: 100}}>
-        <pointLight position={[10, 10, 10]}/>
-        {/*<ambientLight/>*/}
-        <Surfaces gridSize={20}/>
-        <Controls />
-    </Canvas>,
+    <>
+        <h1>SURFACES</h1>
+        <Canvas camera={{position: [0, -10, 10]}}>
+            <pointLight position={[0, 10, 10]}/>
+            <Surfaces
+                gridSize={15}
+                position={[10, 0, 0]}
+                color="#d81b60"
+            />
+            <Surfaces
+                gridSize={15}
+                position={[-10, 0, 0]}
+                color="#1e88e5"
+            />
+            <Controls
+                enablePan={false}
+                enableZoom={false}
+                enableDamping
+            />
+        </Canvas>
+        <a href="https://github.com/Max-Dov/surfaces" className="top-right" children="GitHub" />
+    </>,
     document.getElementById('root')
 );

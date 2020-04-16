@@ -5,6 +5,7 @@ import * as THREE from 'three';
  */
 export class MathService {
     static zAxis: THREE.Vector3 = new THREE.Vector3(0, 0, 1);
+    private static epsilon = 0.0001; // epsilon is needed not to take into account edges intersection
 
     /**
      * Calculates A and B coefficients for equation "y = Ax + B" from 2 given points;
@@ -22,7 +23,7 @@ export class MathService {
     }
 
     /**
-     * Returns true if 2D segments intersect each other, false otherwise:
+     * Returns true if 2D segments intersect each other not on edges, false otherwise:
      * 1. Solves equation system:
      *        y = A1 * x + B1
      *    AND y = A2 * x + B2
@@ -34,13 +35,14 @@ export class MathService {
         const [A1, B1] = MathService.calcCoefficientsFor2DLine(...segmentA);
         const [A2, B2] = MathService.calcCoefficientsFor2DLine(...segmentB);
 
-        if (A1 / A2 === 1) return false; // lines are parallel
+        if (A1 / A2 < 1.01 && A1 / A2 > 0.99) return false; // lines are (almost) parallel
 
-        // pX is intersection point coordinate on Ox axis
+        // pX is intersection point coordinate on X axis
         const pX: number = (B2 - B1) / (A1 - A2);
-
-        return ((segmentA[0].x >= pX && pX >= segmentA[1].x) || (segmentA[1].x >= pX && pX >= segmentA[0].x))  // pX ∈ segmentA
-            && ((segmentB[0].x >= pX && pX >= segmentB[1].x) || (segmentB[1].x >= pX && pX >= segmentB[0].x)); // pX ∈ segmentB
+        return ((segmentA[0].x + MathService.epsilon < pX && pX < segmentA[1].x - MathService.epsilon)
+             || (segmentA[1].x + MathService.epsilon < pX && pX < segmentA[0].x - MathService.epsilon))  // pX ∈ segmentA
+            && ((segmentB[0].x + MathService.epsilon < pX && pX < segmentB[1].x - MathService.epsilon)
+             || (segmentB[1].x + MathService.epsilon < pX && pX < segmentB[0].x - MathService.epsilon)); // pX ∈ segmentB
     }
 
     /**
